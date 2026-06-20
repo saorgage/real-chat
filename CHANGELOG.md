@@ -6,6 +6,12 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.0.2] - 2026-06-20
+
+### Added
+- `fundingUrl` in `manifest.json` (GitHub Sponsors and Ko-fi) so Obsidian shows a Support link
+  on the plugin page. README badges alone don't surface in Obsidian's plugin viewer.
+
 ## [1.0.1] - 2026-06-20
 
 ### Fixed
