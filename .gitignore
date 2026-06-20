@@ -1,0 +1,6 @@
+# Never commit local runtime settings — they contain your API keys
+data.json
+
+# OS / editor cruft
+.DS_Store
+node_modules/
