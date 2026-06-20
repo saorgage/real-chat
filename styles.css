@@ -282,7 +282,8 @@
 .real-chat-timer { font-size: var(--font-ui-smaller); color: var(--text-accent); font-variant-numeric: tabular-nums; margin-left: auto; padding-right: 8px; }
 .real-chat-cost { font-size: var(--font-ui-smaller); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .real-chat-tab { width: 24px; height: 22px; padding: 0; font-size: var(--font-ui-smaller); cursor: pointer; border-radius: 4px; opacity: 0.55; text-align: center; }
-.real-chat-content.is-collapsed { max-height: 120px; overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); }
+.real-chat-content.is-collapsed { max-height: 120px; overflow: hidden; position: relative; }
+.real-chat-content.is-collapsed::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42px; background: linear-gradient(180deg, transparent, var(--background-secondary)); pointer-events: none; }
 .real-chat-chip.is-pin { background: var(--background-modifier-success); }
 pre { position: relative; }
 .real-chat-code-copy { position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 1px 6px; opacity: 0.5; cursor: pointer; }
