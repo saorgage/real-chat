@@ -28,6 +28,11 @@ images, all from a conversation in the sidebar.
 - **Cost tracking**, streaming, slash commands, a saved prompt library, and inline "edit
   selection" from any note.
 
+Support
+Real Chat is free, MIT-licensed, and built in the evenings around a full-time job. If it's earned a place in your vault and you'd like to help keep it going, any support means more time spent fixing bugs and shipping features.
+💜 Sponsor me on GitHub  ·  ☕ Buy me a coffee on Ko-fi
+Every bit genuinely helps. Thank you.
+  
 ## Install
 
 ### From the Community Plugins store
