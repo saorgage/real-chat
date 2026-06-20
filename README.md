@@ -28,10 +28,12 @@ images, all from a conversation in the sidebar.
 - **Cost tracking**, streaming, slash commands, a saved prompt library, and inline "edit
   selection" from any note.
 
-Support
-Real Chat is free, MIT-licensed, and built in the evenings around a full-time job. If it's earned a place in your vault and you'd like to help keep it going, any support means more time spent fixing bugs and shipping features.
-💜 Sponsor me on GitHub  ·  ☕ Buy me a coffee on Ko-fi
-Every bit genuinely helps. Thank you.
+## Support
+
+Real Chat is free and MIT-licensed, built in the evenings around a full-time job. If it's earned a place in your vault, any support helps keep development going.
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/saorgage)
+[![Ko-fi](https://img.shields.io/badge/Buy_me_a_coffee-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/chrisgage)
   
 ## Install
 
