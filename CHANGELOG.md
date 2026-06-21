@@ -6,6 +6,33 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.1.0] - 2026-06-21
+
+### Added
+- **Vision model now runs the full tool loop — see *and* act on an image in one turn.** When the
+  active chat model can't see an attached image (e.g. DeepSeek), the turn routes through the
+  configured vision provider (Gemini etc.) *with the complete tool set*, instead of the old
+  describe-only vision turn. So the model can save the image, OCR it into a note, create/edit
+  notes and search — all from one message. (Verified end-to-end that Gemini 2.5 Flash via the
+  OpenAI-compat endpoint handles vision + tools + streaming + multi-step tool results together.)
+- New `save_attached_image` tool: writes the *actual* pasted/attached image bytes into the vault
+  (decodes the in-memory data URL → `createBinary`), inferring the extension from the MIME type
+  and defaulting to the download folder. Returns a clickable `![[path]]`. Only offered to the
+  model when an image is actually attached.
+
+### Fixed
+- **Pasted/attached images were unusable on follow-up turns.** The vision turn only fired when the
+  *latest* user message carried the image, and attachments were cleared after every send. So
+  "paste image + ask" reached the vision model, but any follow-up routed to a model that can't see
+  images and would confabulate that no image was passed. Images are now **sticky**: the chip
+  persists across turns so every follow-up keeps reaching the vision model. Tap × to remove.
+- `buildContextPrefix` appended `a.content` for image attachments, which have no `.content`,
+  injecting the literal string `"undefined"` into the message text on every image turn.
+
+### Removed
+- The standalone `runVisionTurn` / `callVisionStream` methods, now superseded by the unified
+  tool-loop path (the vision provider is just an alternate driver for the normal loop).
+
 ## [1.0.2] - 2026-06-20
 
 ### Added

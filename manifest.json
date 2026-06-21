@@ -1,7 +1,7 @@
 {
   "id": "real-chat",
   "name": "Real Chat",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "minAppVersion": "1.4.0",
   "description": "Chat sidebar for any OpenAI-compatible API (DeepSeek, OpenRouter and more). Bring your own key. Reads and edits your notes, ranked vault search, web access, image tools, and persistent memory.",
   "author": "Chris Gage",

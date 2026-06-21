@@ -21,7 +21,9 @@ images, all from a conversation in the sidebar.
   DuckDuckGo needs no key; add a Brave or Tavily key for better search.
 - **Images** — paste, drag or attach images; processed locally (compress, resize, convert,
   crop, rotate). Vision input routes to a natively multimodal model, or a vision provider you
-  configure.
+  configure. Attached images are **sticky** (the chip persists across follow-up turns; tap × to
+  remove), and the vision model runs the **full tool loop** — so it can *see an image and act on
+  it in one turn*: save the actual picture into your vault, OCR it into a note, create/edit, search.
 - **Persistent memory & triggers** — a memory note read on every message, with user-defined
   command "triggers".
 - **Reasoning models** — chain-of-thought shows in a collapsible block (display only).

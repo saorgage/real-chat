@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
     "You can also delete_note, rename_note and replace_in_note for vault housekeeping. " +
     "You have image tools: process_image (compress to a target KB, resize, convert format, crop, rotate, flip), batch_process_images (whole folder), and image_info. " +
     "When the user asks to shrink, compress, resize or convert an image, call process_image. For 'reduce to under N KB' use the targetKB option. " +
+    "When the user has pasted or attached an image in their message and wants it kept, filed, or embedded in a note, call save_attached_image to write the real picture into the vault (then reference it with ![[path]]). The image you can see IS the attached one. " +
     "You have data tools: read_csv and read_json to pull content out of attached files. " +
     "You have vault tools: search_vault (ranked keyword search), get_frontmatter, set_frontmatter, add_tag (edit YAML without touching the body), find_backlinks, find_orphans, find_broken_links, word_count, vault_stats, date_math (use date_math for any date calculation rather than guessing). " +
     "For a conceptual 'find notes about X' request, run search_vault several times with synonyms and combine the results. " +
@@ -78,6 +79,7 @@ const TOOLS = [
   { type: 'function', function: { name: 'web_search', description: 'Search the web for current information. Returns a list of results with titles, URLs and snippets.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'web_fetch', description: 'Fetch a web page by URL and return its readable text content. Use after web_search to read a result in full.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'download_file', description: 'Download a file (image, PDF, etc.) from a URL and save it into the vault. Returns the saved path, which you can embed with ![[path]].', parameters: { type: 'object', properties: { url: { type: 'string' }, path: { type: 'string', description: 'Optional target path in the vault, e.g. Attachments/cover.jpg. If omitted, a name is derived from the URL.' } }, required: ['url'] } } },
+  { type: 'function', function: { name: 'save_attached_image', description: 'Save the actual image the user pasted/attached in THIS message to a file in the vault (the real picture bytes, not a description). Use whenever the user wants to keep, file, or embed a pasted screenshot/photo. Returns the saved path; embed it with ![[path]].', parameters: { type: 'object', properties: { path: { type: 'string', description: 'Target path in the vault, e.g. Attachments/screenshot.png. If omitted, a default name in the download folder is used. Extension is added from the image type if missing.' }, index: { type: 'number', description: '0-based index of which attached image to save when several are attached; default 0.' } }, required: [] } } },
   { type: 'function', function: { name: 'delete_note', description: 'Delete a note or file from the vault (moves to system trash).', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
   { type: 'function', function: { name: 'rename_note', description: 'Rename or move a note/file to a new path.', parameters: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] } } },
   { type: 'function', function: { name: 'replace_in_note', description: 'Find and replace a string in a note. Safer than edit_note for big files. Replaces the first occurrence unless all=true.', parameters: { type: 'object', properties: { path: { type: 'string' }, find: { type: 'string' }, replace: { type: 'string' }, all: { type: 'boolean' } }, required: ['path', 'find', 'replace'] } } },
@@ -474,7 +476,7 @@ class GageChatView extends ItemView {
   visionReady() { const s = this.plugin.settings; return s.visionEnabled && s.visionBaseUrl && s.visionKey && s.visionModel; }
   imagesAvailable() { return this.visionReady() || this.plugin.activeModelHasVision(this.sessionModel()); }
   fileToDataUrl(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('read failed')); r.readAsDataURL(file); }); }
-  async addImageAttachment(label, dataUrl) { this.cur().attachments.push({ label: label, image: dataUrl }); this.persist(); this.renderChips(); if (!this.imagesAvailable()) new Notice('Image attached. Note: to read it, pick a multimodal model or configure a vision provider in settings.'); }
+  async addImageAttachment(label, dataUrl) { this.cur().attachments.push({ label: label, image: dataUrl }); this.persist(); this.renderChips(); if (!this.imagesAvailable()) new Notice('Image attached, but the current model cannot see it — pick a multimodal model or set a vision provider in settings.'); else { const reader = this.visionReady() ? this.plugin.settings.visionModel : this.sessionModel(); new Notice('Image attached — ' + reader + ' will read it. It stays attached for follow-up questions; tap × on the chip to remove.'); } }
   async onPaste(e) { const items = e.clipboardData && e.clipboardData.items; if (!items) return; for (const it of items) { if (it.type && it.type.startsWith('image/')) { const file = it.getAsFile(); if (!file) continue; e.preventDefault(); try { const url = await this.fileToDataUrl(file); await this.addImageAttachment('Pasted image', url); } catch (err) { new Notice('Could not read pasted image.'); } } } }
   pickImage() { const files = this.app.vault.getFiles().filter(f => IMAGE_EXTS.includes(extOf(f.path))).sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 60); if (!files.length) { new Notice('No images found in the vault.'); return; } new PickerModal(this.app, 'Attach an image', files.map(f => ({ label: f.path, value: f.path })), async (path) => { const f = this.app.vault.getAbstractFileByPath(path); if (f instanceof TFile) { try { const buf = await this.app.vault.readBinary(f); const b64 = this._arrToB64(buf); const mime = IMAGE_MIME[extOf(path)] || 'image/png'; await this.addImageAttachment(f.name, 'data:' + mime + ';base64,' + b64); } catch (e) { new Notice('Could not read image: ' + e.message); } } }).open(); }
 
@@ -550,7 +552,7 @@ class GageChatView extends ItemView {
     let pre = '';
     if (session.reference) { const f = this.app.workspace.getActiveFile(); if (f) { try { pre += '\n\n[Currently open note "' + f.path + '"]:\n' + (await this.app.vault.read(f)); } catch (e) {} } }
     for (const p of (session.pinned || [])) { const f = this.app.vault.getAbstractFileByPath(p.path); if (f instanceof TFile) { try { pre += '\n\n[Pinned note "' + p.path + '"]:\n' + (await this.app.vault.read(f)); } catch (e) {} } }
-    for (const a of (session.attachments || [])) pre += '\n\n' + a.content;
+    for (const a of (session.attachments || [])) { if (a.content) pre += '\n\n' + a.content; }
     return pre;
   }
   async readMemory() { if (!this.plugin.settings.memoryEnabled) return ''; const path = this.plugin.settings.memoryPath; if (!path) return ''; let file = this.app.vault.getAbstractFileByPath(path); if (!(file instanceof TFile)) { file = await this.plugin.ensureFile(path, MEMORY_TEMPLATE); if (!file) return ''; } try { return await this.app.vault.read(file); } catch (e) { return ''; } }
@@ -568,7 +570,9 @@ class GageChatView extends ItemView {
     const openCtx = await this.buildContextPrefix(session);
     const imgs = (session.attachments || []).filter(a => a.image).map(a => a.image);
     session.messages.push({ role: 'user', content: raw, modelContent: raw + openCtx, time: nowStamp(), images: imgs.length ? imgs : undefined });
-    session.attachments = []; this.renderChips();
+    // Keep image attachments "sticky" so follow-up questions still reach the vision model (text/data attachments are
+    // already folded into modelContent, so drop those). If nothing can see images, clear everything (one-shot warning).
+    session.attachments = this.imagesAvailable() ? (session.attachments || []).filter(a => a.image) : []; this.renderChips();
     if (!session.title && session.messages.filter(m => m.role === 'user').length === 1) { session.title = raw.slice(0, 30); }
     this.persist();
     await this._runWithBusy(session, sessionIndex);
@@ -592,12 +596,12 @@ class GageChatView extends ItemView {
     await this._runWithBusy(session, sessionIndex);
   }
 
-  async buildApiMessages(session) {
+  async buildApiMessages(session, opts) {
     const out = [{ role: 'system', content: await this.buildSystemPrompt() }];
-    const nativeVision = this.plugin.activeModelHasVision(this.sessionModel());
+    const attachImages = (opts && opts.forceImages) || this.plugin.activeModelHasVision(this.sessionModel());
     for (const m of session.messages) {
       if (m.role === 'user') {
-        if (nativeVision && m.images && m.images.length) {
+        if (attachImages && m.images && m.images.length) {
           const parts = [{ type: 'text', text: m.modelContent || m.content }];
           for (const img of m.images) parts.push({ type: 'image_url', image_url: { url: img } });
           out.push({ role: 'user', content: parts });
@@ -617,18 +621,31 @@ class GageChatView extends ItemView {
     const lastUser = [...session.messages].reverse().find(m => m.role === 'user');
     const wantVision = !!(lastUser && lastUser.images && lastUser.images.length);
     const nativeVision = wantVision && this.plugin.activeModelHasVision(this.sessionModel());
-    if (wantVision && !nativeVision && !this.visionReady()) { session.messages.push({ role: 'assistant', content: 'You attached an image, but the current model cannot see images and no vision provider is configured. Either pick a multimodal OpenRouter model, or turn on a vision provider in settings.', time: nowStamp() }); return; }
-    if (wantVision && !nativeVision) { await this.runVisionTurn(session, lastUser); return; }
-    // nativeVision (or no image): proceed through the normal tool loop. buildApiMessages attaches images inline.
+    // Pick the driver. When the active model can't see the attached image, run the SAME tool loop but
+    // against the vision provider (e.g. Gemini), passing the image inline — so it can both see the image
+    // AND call vault tools (save_attached_image, create_note, …) in one go.
+    let driver = null, forceImages = false, via = null;
+    if (wantVision && !nativeVision) {
+      if (!this.visionReady()) { session.messages.push({ role: 'assistant', content: 'You attached an image, but the current model cannot see images and no vision provider is configured. Either pick a multimodal OpenRouter model, or turn on a vision provider in settings.', time: nowStamp() }); return; }
+      const s = this.plugin.settings;
+      driver = { baseUrl: s.visionBaseUrl, key: s.visionKey, model: s.visionModel, headers: {} };
+      forceImages = true; via = 'vision';
+    }
+    // Make the pasted image bytes available to the save_attached_image tool during this run.
+    this._pendingImages = wantVision ? (lastUser.images || []) : null;
     for (let step = 0; step < MAX_TOOL_STEPS; step++) {
-      const apiMessages = await this.buildApiMessages(session);
-      const streamMsg = { role: 'assistant', content: '', reasoning: '', time: nowStamp(), streaming: true }; let used = false;
-      const result = await this.callDeepSeekStream(apiMessages, this.aborters[sessionIndex], (delta, kind) => { if (!used) { used = true; session.messages.push(streamMsg); } if (kind === 'reasoning') streamMsg.reasoning += delta; else streamMsg.content += delta; if (this.sessions[this.active] === session) this.renderMessages(); });
+      const apiMessages = await this.buildApiMessages(session, { forceImages: forceImages });
+      const streamMsg = { role: 'assistant', content: '', reasoning: '', time: nowStamp(), streaming: true, via: via || undefined }; let used = false;
+      const result = await this.callDeepSeekStream(apiMessages, this.aborters[sessionIndex], (delta, kind) => { if (!used) { used = true; session.messages.push(streamMsg); } if (kind === 'reasoning') streamMsg.reasoning += delta; else streamMsg.content += delta; if (this.sessions[this.active] === session) this.renderMessages(); }, driver);
       if (used) { const i = session.messages.indexOf(streamMsg); if (i >= 0) session.messages.splice(i, 1); }
-      let turnCost = 0, turnTok = 0; if (result.usage) { const r = this.plugin.recordUsage(result.usage, this.sessionModel()); turnCost = r.cost; turnTok = r.tok; session.sessTok = (session.sessTok || 0) + r.tok; session.sessCost = (session.sessCost || 0) + r.cost; }
+      let turnCost = 0, turnTok = 0;
+      if (result.usage) {
+        if (via === 'vision') { turnTok = (result.usage.prompt_tokens || 0) + (result.usage.completion_tokens || 0); session.sessTok = (session.sessTok || 0) + turnTok; }   // vision provider isn't billed against DeepSeek/OpenRouter pricing
+        else { const r = this.plugin.recordUsage(result.usage, this.sessionModel()); turnCost = r.cost; turnTok = r.tok; session.sessTok = (session.sessTok || 0) + r.tok; session.sessCost = (session.sessCost || 0) + r.cost; }
+      }
       const msg = result.message;
-      if (msg.tool_calls && msg.tool_calls.length > 0) { session.messages.push({ role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls }); for (const tc of msg.tool_calls) { toolsUsed.push(tc.function.name); const r = await this.executeTool(tc); session.messages.push({ role: 'tool', tool_call_id: tc.id, content: r }); } if (this.sessions[this.active] === session) { this.renderMessages(); this.refreshCost(); } continue; }
-      session.messages.push({ role: 'assistant', content: msg.content || '', reasoning: msg.reasoning || '', time: nowStamp(), cost: turnCost, tok: turnTok, tools: toolsUsed.slice(), files: touchedFiles.slice(), model: this.sessionModel() });
+      if (msg.tool_calls && msg.tool_calls.length > 0) { session.messages.push({ role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls, via: via || undefined }); for (const tc of msg.tool_calls) { toolsUsed.push(tc.function.name); const r = await this.executeTool(tc); session.messages.push({ role: 'tool', tool_call_id: tc.id, content: r }); } if (this.sessions[this.active] === session) { this.renderMessages(); this.refreshCost(); } continue; }
+      session.messages.push({ role: 'assistant', content: msg.content || '', reasoning: msg.reasoning || '', time: nowStamp(), cost: turnCost, tok: turnTok, tools: toolsUsed.slice(), files: touchedFiles.slice(), model: via === 'vision' ? this.plugin.settings.visionModel : this.sessionModel(), via: via || undefined });
       if (this.sessions[this.active] === session) this.refreshCost();
       return;
     }
@@ -636,57 +653,17 @@ class GageChatView extends ItemView {
     if (this.sessions[this.active] === session) this.renderMessages();
   }
 
-  async runVisionTurn(session, userMsg) {
-    const s = this.plugin.settings;
-    const sysParts = await this.buildSystemPrompt();
-    const apiMessages = [{ role: 'system', content: sysParts }];
-    // include prior text turns as plain text for continuity (no images from history, to keep it simple/cheap)
-    for (const m of session.messages) {
-      if (m === userMsg) break;
-      if (m.role === 'user') apiMessages.push({ role: 'user', content: m.content || '' });
-      else if (m.role === 'assistant' && (m.content || '').trim()) apiMessages.push({ role: 'assistant', content: m.content });
-    }
-    const parts = [];
-    if (userMsg.modelContent || userMsg.content) parts.push({ type: 'text', text: userMsg.modelContent || userMsg.content });
-    for (const img of (userMsg.images || [])) parts.push({ type: 'image_url', image_url: { url: img } });
-    apiMessages.push({ role: 'user', content: parts });
-
-    const streamMsg = { role: 'assistant', content: '', time: nowStamp(), streaming: true, via: 'vision' }; let used = false;
-    let usage = null;
-    try {
-      usage = await this.callVisionStream(apiMessages, this.aborters[this.active], (delta) => { if (!used) { used = true; session.messages.push(streamMsg); } streamMsg.content += delta; if (this.sessions[this.active] === session) this.renderMessages(); });
-    } catch (e) {
-      if (used) { const i = session.messages.indexOf(streamMsg); if (i >= 0) session.messages.splice(i, 1); }
-      throw e;
-    }
-    if (used) { const i = session.messages.indexOf(streamMsg); if (i >= 0) session.messages.splice(i, 1); }
-    // vision provider cost is not tracked against DeepSeek pricing; show tokens only if returned
-    let tok = 0; if (usage && (usage.total_tokens || usage.prompt_tokens)) tok = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
-    session.messages.push({ role: 'assistant', content: streamMsg.content || '(no response)', time: nowStamp(), tok: tok, cost: 0, tools: [], via: 'vision' });
-    if (this.sessions[this.active] === session) { this.renderMessages(); this.refreshCost(); }
-  }
-
-  async callVisionStream(apiMessages, aborter, onDelta) {
-    const s = this.plugin.settings;
-    const body = { model: s.visionModel, messages: apiMessages, temperature: this.plugin.settings.temperature, stream: true };
-    const res = await fetch(s.visionBaseUrl.replace(/\/$/, '') + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.visionKey }, body: JSON.stringify(body), signal: aborter ? aborter.signal : undefined });
-    if (!res.ok) { const txt = await res.text(); throw new Error('Vision ' + res.status + ' ' + txt.slice(0, 300)); }
-    if (!res.body || !res.body.getReader) { const json = await res.json(); const msg = json.choices && json.choices[0] && json.choices[0].message; if (msg && msg.content && onDelta) onDelta(typeof msg.content === 'string' ? msg.content : ''); return json.usage; }
-    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '', usage = null;
-    while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const lines = buffer.split('\n'); buffer = lines.pop(); for (const line of lines) { const t = line.trim(); if (!t.startsWith('data:')) continue; const data = t.slice(5).trim(); if (data === '[DONE]') continue; let obj; try { obj = JSON.parse(data); } catch (e) { continue; } if (obj.usage) usage = obj.usage; const ch = obj.choices && obj.choices[0]; if (!ch) continue; const d = ch.delta || {}; if (d.content && onDelta) onDelta(d.content); } }
-    return usage;
-  }
-
-  async callDeepSeekStream(apiMessages, aborter, onDelta) {
+  async callDeepSeekStream(apiMessages, aborter, onDelta, driver) {
     const st = this.plugin.settings;
     const activeTools = TOOLS.filter(t => {
       const n = t.function.name;
       if (IS_MOBILE && n === 'run_command') return false;
+      if (n === 'save_attached_image' && !(this._pendingImages && this._pendingImages.length)) return false;
       if ((n === 'web_search' || n === 'web_fetch' || n === 'download_file') && !st.webEnabled) return false;
       if (n === 'run_command' && !st.allowRunCommand) return false;
       return true;
     });
-    const api = this.plugin.activeApi(this.sessionModel());
+    const api = driver || this.plugin.activeApi(this.sessionModel());
     const body = { model: api.model, messages: apiMessages, tools: activeTools, temperature: this.plugin.settings.temperature, stream: true, stream_options: { include_usage: true } };
     const res = await fetch(api.baseUrl.replace(/\/$/, '') + '/chat/completions', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key }, api.headers), body: JSON.stringify(body), signal: aborter ? aborter.signal : undefined });
     if (!res.ok) { const txt = await res.text(); throw new Error(res.status + ' ' + txt.slice(0, 300)); }
@@ -731,6 +708,27 @@ class GageChatView extends ItemView {
         this._touch(path); new Notice('Downloaded ' + path);
         return 'Saved to ' + path + '. Embed it with ![[' + path + ']]';
       } catch (e) { return 'Download error: ' + (e.message || e); }
+    }
+    if (name === 'save_attached_image') {
+      const imgs = this._pendingImages || [];
+      if (!imgs.length) return 'Error: no image is attached to this message.';
+      let idx = parseInt(args.index, 10); if (isNaN(idx) || idx < 0) idx = 0;
+      if (idx >= imgs.length) return 'Error: only ' + imgs.length + ' image(s) attached (valid index 0-' + (imgs.length - 1) + ').';
+      const m = /^data:([^;]+);base64,(.*)$/.exec(imgs[idx] || '');
+      if (!m) return 'Error: the attached image is not in a readable (base64 data URL) format.';
+      const extByMime = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp' };
+      const ext = extByMime[m[1]] || 'png';
+      let path = (args.path || '').trim();
+      if (!path) path = (this.plugin.settings.downloadFolder || 'Attachments').replace(/\/$/, '') + '/pasted-image.' + ext;
+      if (!/\.[a-z0-9]+$/i.test(path)) path += '.' + ext;
+      let buf; try { const bin = atob(m[2]); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); buf = bytes.buffer; } catch (e) { return 'Error: could not decode the image data.'; }
+      try {
+        const parts = path.split('/'); if (parts.length > 1) { const folder = parts.slice(0, -1).join('/'); if (!vault.getAbstractFileByPath(folder)) await vault.createFolder(folder).catch(() => {}); }
+        const existing = vault.getAbstractFileByPath(path);
+        if (existing instanceof TFile) await vault.modifyBinary(existing, buf); else await vault.createBinary(path, buf);
+        this._touch(path); new Notice('Saved image to ' + path);
+        return 'Saved the attached image to ' + path + '. Embed it with ![[' + path + ']]';
+      } catch (e) { return 'Error: ' + e.message; }
     }
     if (name === 'delete_note') {
       const f = vault.getAbstractFileByPath(args.path); if (!f) return 'Error: nothing at ' + args.path;
@@ -1148,7 +1146,11 @@ module.exports = class GageChatPlugin extends Plugin {
       'message (works on mobile too). While you are scrolled up reading, streaming replies no longer yank you to the bottom.', '',
       '## Images & vision', 'DeepSeek has no image model, so images go to a separate provider you set in Settings (Vision provider).',
       'Turn it on, paste a base URL, key and model (e.g. Gemini free tier or OpenRouter). Then paste, drag, or use the Image',
-      'button to attach a picture. Only image messages use that provider; text stays on DeepSeek. Vision replies are marked "Vision".', '',
+      'button to attach a picture. A notice confirms which model will read it. An attached image STAYS attached (sticky chip)',
+      'so follow-up questions about the same picture keep reaching the vision model — tap × on the chip to remove it. While an',
+      'image is attached every turn is answered by the vision model and marked "Vision". The vision model runs the FULL tool',
+      'loop: it can see the image AND act on it in one go — e.g. "save this and tell me what it says" writes the real picture',
+      'into your vault (save_attached_image) and reads it back. It can also create/edit notes and search from what it sees.', '',
       '## Web & files', 'When web access is on (Settings), the model can web_search, web_fetch and download_file.',
       'download_file grabs an image or file from a URL and saves it to your download folder; embed with ![[path]].',
       '## Vault housekeeping', 'It can also delete_note, rename_note and replace_in_note (targeted find/replace, safer than full rewrite).', '',
