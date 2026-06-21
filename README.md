@@ -5,6 +5,9 @@ OpenRouter (300+ models including Claude, GPT and Gemini), or your own endpoint.
 own key. It can read and edit your notes, search your vault, browse the web, and process
 images, all from a conversation in the sidebar.
 
+📖 **[Full documentation is on the wiki »](https://github.com/saorgage/real-chat/wiki)** —
+setup, usage, vision & images, tools & vault actions, and memory & triggers.
+
 ## Features
 
 - **Five chat sessions** with their own history, draft, model and settings. Histories persist
