@@ -6,6 +6,18 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.1.1] - 2026-06-21
+
+### Fixed
+- **"lone leading surrogate in hex escape" (HTTP 400) could brick a chat session.** The ranked
+  vault-search snippet was sliced at fixed character offsets (`body.slice(at-60, at+120)`), which
+  could cut through a surrogate pair (e.g. an emoji in a note), leaving a half-character. That
+  broken snippet got saved into the session as a `tool` result, so every later message re-sent it
+  and the provider rejected the whole request. Two-part fix: the snippet is now surrogate-safe, and
+  a `stripLoneSurrogates` pass cleans every outgoing message (system/user/assistant/tool) at the
+  API boundary — so any corrupted text (truncated emoji, bad paste, a poisoned note) can no longer
+  400 the request. Valid emoji and characters are preserved.
+
 ## [1.1.0] - 2026-06-21
 
 ### Added
