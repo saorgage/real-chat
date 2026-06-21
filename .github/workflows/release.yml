@@ -1,0 +1,63 @@
+name: Release Obsidian plugin
+
+# Publishes a GitHub Release whenever a version tag (e.g. 1.1.0) is pushed.
+# Obsidian detects plugin updates from the latest Release's assets, not from
+# git itself, so this attaches main.js / manifest.json / styles.css to the
+# release. Real Chat has no build step, so the committed files are shipped as-is.
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches manifest.json version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          manifest_version="$(grep -oP '"version"\s*:\s*"\K[^"]+' manifest.json)"
+          echo "tag=$tag  manifest=$manifest_version"
+          if [ "$tag" != "$manifest_version" ]; then
+            echo "::error::Tag '$tag' does not match manifest.json version '$manifest_version'. Bump manifest.json (and versions.json) before tagging."
+            exit 1
+          fi
+
+      - name: Check required files exist
+        run: |
+          for f in main.js manifest.json styles.css; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required asset '$f' is missing."
+              exit 1
+            fi
+          done
+
+      - name: Extract changelog notes for this version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          awk -v hdr="## [$tag]" '
+            index($0, hdr) == 1 { flag=1; next }
+            flag && /^## \[/ { flag=0 }
+            flag { print }
+          ' CHANGELOG.md > release-notes.md
+          # Fall back to a stub if no matching section was found.
+          if [ ! -s release-notes.md ]; then
+            printf 'Real Chat %s\n' "$tag" > release-notes.md
+          fi
+          echo "----- release notes -----"
+          cat release-notes.md
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            main.js manifest.json styles.css
