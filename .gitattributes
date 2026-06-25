@@ -1,0 +1,4 @@
+# Normalize line endings: store text files as LF in the repo, and check them out
+# as LF on every platform. Prevents spurious CRLF/LF "modified" churn (e.g. styles.css)
+# from Windows working copies with core.autocrlf=true.
+* text=auto eol=lf
