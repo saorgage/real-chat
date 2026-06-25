@@ -6,6 +6,17 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.1.3] - 2026-06-25
+
+### Fixed
+- **Expanded character sanitisation to prevent intermittent "400 — Invalid character" errors.**
+  `stripLoneSurrogates` (renamed `sanitizeText`) now also strips C0/C1 control characters (except
+  `\t`, `\n`, `\r`) and Unicode noncharacters (`U+FDD0`–`U+FDEF`, `U+FFFE`–`U+FFFF`) from every
+  outgoing message and search snippet. These additional character classes can appear in corrupted
+  clipboard data or damaged note content and, like lone surrogates, cause the API to reject the
+  entire request. The broader pass eliminates the occasional "Real Chat error: 400" popup during
+  normal chat.
+
 ## [1.1.2] - 2026-06-25
 
 ### Fixed

@@ -129,14 +129,15 @@ const TOOLS = [
 function makeSession() { return { messages: [], reference: false, draft: '', model: '', attachments: [], pinned: [], title: '', yolo: null, sessTok: 0, sessCost: 0 }; }
 function nowStamp() { const d = new Date(); return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 function extOf(p) { const i = p.lastIndexOf('.'); return i < 0 ? '' : p.slice(i + 1).toLowerCase(); }
-// Strip "lone" UTF-16 surrogates (one half of a surrogate pair with no partner). These appear when
-// text is sliced mid-character (e.g. a search snippet cutting through an emoji) and otherwise make
-// the provider reject the entire request with "lone leading surrogate in hex escape" (HTTP 400).
-function stripLoneSurrogates(s) {
+// Strip characters that routinely cause provider 400s: lone UTF-16 surrogates (half-emoji from
+// bad slices), C0/C1 control chars, and Unicode noncharacters (U+FDD0-U+FDEF, U+*FFFE-U+*FFFF).
+// These appear in corrupted notes, search snippets, or bad clipboard data.
+function sanitizeText(s) {
   if (typeof s !== 'string') return s;
   return s
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')      // high surrogate not followed by a low → drop it
-    .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '$1');  // low surrogate not preceded by a high → drop the low
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
+    .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '$1')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFDD0-\uFDEF\uFFFE\uFFFF]/g, '');
 }
 
 class ConfirmModal extends Modal {
@@ -613,13 +614,13 @@ class GageChatView extends ItemView {
   }
 
   async buildApiMessages(session, opts) {
-    // stripLoneSurrogates on every outgoing string guards against corrupted text (search snippets,
+    // sanitizeText on every outgoing string guards against corrupted text (search snippets,
     // truncated emoji in notes, bad clipboard data) triggering a provider 400 on the whole request.
-    const out = [{ role: 'system', content: stripLoneSurrogates(await this.buildSystemPrompt()) }];
+    const out = [{ role: 'system', content: sanitizeText(await this.buildSystemPrompt()) }];
     const attachImages = (opts && opts.forceImages) || this.plugin.activeModelHasVision(this.sessionModel());
     for (const m of session.messages) {
       if (m.role === 'user') {
-        const text = stripLoneSurrogates(m.modelContent || m.content);
+        const text = sanitizeText(m.modelContent || m.content);
         if (attachImages && m.images && m.images.length) {
           const parts = [{ type: 'text', text: text }];
           for (const img of m.images) parts.push({ type: 'image_url', image_url: { url: img } });
@@ -627,8 +628,8 @@ class GageChatView extends ItemView {
         } else {
           out.push({ role: 'user', content: text });
         }
-      } else if (m.role === 'assistant') { const msg = { role: 'assistant', content: stripLoneSurrogates(m.content || '') }; if (m.tool_calls) msg.tool_calls = m.tool_calls; out.push(msg); }
-      else if (m.role === 'tool') out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: stripLoneSurrogates(m.content) });
+      } else if (m.role === 'assistant') { const msg = { role: 'assistant', content: sanitizeText(m.content || '') }; if (m.tool_calls) msg.tool_calls = m.tool_calls; out.push(msg); }
+      else if (m.role === 'tool') out.push({ role: 'tool', tool_call_id: m.tool_call_id, content: sanitizeText(m.content) });
     }
     return out;
   }
@@ -1184,7 +1185,7 @@ module.exports = class GageChatPlugin extends Plugin {
       '## Long tasks', 'There is a 50-step tool-loop cap per turn. If a task hits it, the reply pauses with a Continue button — press it to',
       'let the model carry on from where it stopped, rather than starting over.', '',
       '## Limits', 'edit_note rewrites whole files. Vision cost is not tracked (DeepSeek pricing only).',
-      'Corrupted characters in notes (e.g. a half-emoji from a bad slice or paste) are stripped from requests so they no longer cause a provider 400.', ''
+      'Corrupted characters (lone surrogates from half-emojis, C0/C1 control chars, Unicode noncharacters) are stripped from every outgoing message so they no longer cause a provider 400.', ''
     ].join('\n');
   }
 
@@ -1274,7 +1275,7 @@ module.exports = class GageChatPlugin extends Plugin {
       if (terms.length > 1 && matched === terms.length) score += 8;            // all words present
       if (terms.length > 1) { if (title.includes(phrase)) score += 20; const pIdx = lcBody.indexOf(phrase); if (pIdx >= 0) { score += 15; where.add('phrase'); if (firstIdx < 0 || pIdx < firstIdx) firstIdx = pIdx; } }
       const at = firstIdx >= 0 ? firstIdx : 0;
-      const snip = stripLoneSurrogates(body.slice(Math.max(0, at - 60), at + 120).replace(/\s+/g, ' ').trim());
+      const snip = sanitizeText(body.slice(Math.max(0, at - 60), at + 120).replace(/\s+/g, ' ').trim());
       scored.push({ path: f.path, title: f.basename, score: score, snip: snip, where: [...where].join('/'), mtime: f.stat.mtime });
     }
     scored.sort((a, b) => b.score - a.score || b.mtime - a.mtime);
