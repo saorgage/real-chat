@@ -141,8 +141,15 @@ function stripLoneSurrogates(s) {
 
 class ConfirmModal extends Modal {
   constructor(app, title, body, onConfirm) { super(app); this.title = title; this.body = body; this.onConfirm = onConfirm; this.decided = false; }
-  onOpen() { const { contentEl } = this; contentEl.createEl('h3', { text: this.title }); const pre = contentEl.createEl('pre', { cls: 'real-chat-confirm-preview' }); pre.setText(this.body.length > 1500 ? this.body.slice(0, 1500) + '\n\n…(truncated)' : this.body); const row = contentEl.createDiv({ cls: 'real-chat-confirm-row' }); row.createEl('button', { text: 'Cancel' }).onclick = () => { this.decided = true; this.close(); this.onConfirm(false); }; row.createEl('button', { text: 'Apply changes', cls: 'mod-cta' }).onclick = () => { this.decided = true; this.close(); this.onConfirm(true); }; }
-  onClose() { this.contentEl.empty(); if (!this.decided) this.onConfirm(false); }
+  onOpen() {
+    const { contentEl } = this; contentEl.createEl('h3', { text: this.title }); const pre = contentEl.createEl('pre', { cls: 'real-chat-confirm-preview' }); pre.setText(this.body.length > 1500 ? this.body.slice(0, 1500) + '\n\n…(truncated)' : this.body); const row = contentEl.createDiv({ cls: 'real-chat-confirm-row' }); row.createEl('button', { text: 'Cancel' }).onclick = () => { this.decided = true; this.close(); this.onConfirm(false); }; row.createEl('button', { text: 'Apply changes', cls: 'mod-cta' }).onclick = () => { this.decided = true; this.close(); this.onConfirm(true); };
+    // A stray click on the dimmed backdrop must NOT silently cancel the change. Swallow clicks that land
+    // outside the dialog box (capture-phase, so we run before Obsidian's own backdrop-close handler). Only
+    // the explicit Cancel / Apply buttons — or the Escape key — decide.
+    this._backdropGuard = (e) => { if (this.modalEl && !this.modalEl.contains(e.target)) { e.stopPropagation(); } };
+    this.containerEl.addEventListener('click', this._backdropGuard, true);
+  }
+  onClose() { if (this._backdropGuard) { this.containerEl.removeEventListener('click', this._backdropGuard, true); this._backdropGuard = null; } this.contentEl.empty(); if (!this.decided) this.onConfirm(false); }
 }
 
 class InfoModal extends Modal {
@@ -1131,7 +1138,9 @@ module.exports = class GageChatPlugin extends Plugin {
       '## Sessions & history', 'Five chats (1-5), each with own history, draft, model, pins, YOLO setting. Tabs auto-title from your first message.',
       'Histories survive restarts. The ⋯ menu archives a session, opens history (reload any past chat), or exports to a note.', '',
       '## YOLO mode', 'Header badge toggles YOLO for the current session (overrides the global default in settings). When ON, all file',
-      'changes apply with NO confirmation. Obsidian file history/trash is still your safety net. "Safe" shows when off.', '',
+      'changes apply with NO confirmation. Obsidian file history/trash is still your safety net. "Safe" shows when off.',
+      'When Safe asks before a change, the Apply changes / Cancel dialog no longer dismisses if you misclick on the dimmed',
+      'background around it — only the buttons (or Escape) decide, so a stray click can\'t silently cancel an edit.', '',
       '## Memory & triggers', 'The file `' + this.settings.memoryPath + '` is read every message. Add a `## Triggers` section with commands like:', '',
       '    - **add book**: when I say "add book <title>", append "- <title>" to "Reading/Reading list.md".', '', 'Type `add book Dune` to run it. "remember this: ..." appends to memory.', '',
       '## Context', '- "Ref note" feeds the open note. "Pin" keeps notes in context for the whole session (📌 chips).',
@@ -1480,4 +1489,5 @@ module.exports = class GageChatPlugin extends Plugin {
   async saveSettings() { await this.saveData(this.settings); }
 };
 
+/* nosourcemap */
 /* nosourcemap */

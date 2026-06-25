@@ -6,6 +6,16 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.1.2] - 2026-06-25
+
+### Fixed
+- **The "Apply changes" confirmation dialog dismissed (as a silent cancel) on a slight misclick.**
+  `ConfirmModal` extends Obsidian's `Modal`, which closes on a click anywhere on the dimmed backdrop;
+  `onClose` then treats any non-explicit close as `onConfirm(false)`, so a near-miss click cancelled the
+  pending edit with no feedback. Added a capture-phase click guard on `containerEl` that swallows clicks
+  landing outside `modalEl`, so only the explicit **Cancel** / **Apply changes** buttons (or Escape) decide.
+  The guard is removed in `onClose`.
+
 ## [1.1.1] - 2026-06-21
 
 ### Fixed
