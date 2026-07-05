@@ -111,3 +111,10 @@ working directory), any other editor or AI tool, or you. That is the point of ke
 here rather than in a tool's private memory — Claude Code's own memory store is only visible to
 Claude Code, whereas this file is universal. Keep it updated whenever the version is bumped (the
 same moment you edit `manifest.json`).
+
+## Wiki maintenance reminder
+
+> **⚠️ IMPORTANT**: Whenever this CHANGELOG.md is updated for a new release, the GitHub wiki
+> MUST also be updated simultaneously. See [Wiki-Maintenance](https://github.com/saorgage/real-chat/wiki/Wiki-Maintenance)
+> for the canonical rule and instructions. The wiki is the public face of the project and users
+> rely on it for accurate information. Outdated wiki = confused users = more support overhead.
