@@ -1,0 +1,25 @@
+name: Sync wiki
+
+on:
+  push:
+    paths:
+      - 'wiki/**'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required to get full git history for the wiki action
+      
+      - name: Sync wiki
+        uses: Andrew-Chen-Wang/github-wiki-action@v4
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIKI_DIR: wiki
+          COMMIT_MSG: "Auto-sync wiki from main repo"
+        with:
+          # Ensure the action has permission to push to the wiki repo
+          # The GITHUB_TOKEN has sufficient permissions by default
+          wiki_repository: "saorgage/real-chat.wiki"
