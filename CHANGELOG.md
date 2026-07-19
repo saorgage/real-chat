@@ -6,6 +6,11 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.2.0] - 2026-07-05
+
+### Added
+- **Mistral provider support** — Mistral Large, Small, Pixtral (vision-capable), and Codestral models. Configure your Mistral API key in Settings and select Mistral models per-session. Pixtral Large supports vision (image understanding).
+
 ## [1.1.3] - 2026-06-25
 
 ### Fixed
