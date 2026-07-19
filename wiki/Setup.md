@@ -15,15 +15,16 @@ Once accepted: **Settings → Community plugins → Browse → search "Real Chat
 1. Open **Settings → Real Chat**.
 2. Choose a **provider**:
    - **DeepSeek direct** — cheapest, cache-aware pricing.
+   - **Mistral** — Mistral Large, Small, Pixtral (vision), and Codestral models.
    - **OpenRouter** — one key, 300+ models (Claude, GPT, Gemini, …) with a live model list and per-model pricing.
-   - **Custom** — any OpenAI-compatible base URL.
 3. Paste your **API key** for the chosen provider. On OpenRouter, click **Load / refresh models** to pull the list, then star your favourites.
 4. Open the sidebar from the ribbon (speech-bubble icon) or run the **Open Real Chat** command.
 
 ## Picking a model
 
 - Each session has its own model — set it from the model selector in the chat header.
-- On OpenRouter, the list shows per-model pricing and marks **multimodal (vision-capable)** models, which can read images directly. For text-only models like DeepSeek, configure a separate **Vision provider** — see **[Vision & Images](Vision-and-Images)**.
+- On OpenRouter, the list shows per-model pricing and marks **multimodal (vision-capable)** models, which can read images directly.
+- On Mistral, **Pixtral Large** is the vision-capable model. For text-only models (DeepSeek, Mistral Small/Large, Codestral), configure a separate **Vision provider** — see **[Vision & Images](Vision-and-Images)**.
 
 ## Where settings live
 
