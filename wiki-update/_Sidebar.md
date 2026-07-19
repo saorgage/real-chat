@@ -1,4 +1,4 @@
-### Real Chat
+# Real Chat
 
 - [Home](Home)
 - [Setup](Setup)
@@ -6,10 +6,9 @@
 - [Vision & Images](Vision-and-Images)
 - [Tools & Vault Actions](Tools-and-Vault-Actions)
 - [Memory & Triggers](Memory-and-Triggers)
-- [Changelog](Changelog)
+- [Planned Features](Planned-Features)
 
 ---
 - [Releases](https://github.com/saorgage/real-chat/releases)
-- [Repository](https://github.com/saorgage/real-chat)
+- [Changelog](https://github.com/saorgage/real-chat/blob/main/CHANGELOG.md)
 - [Report an issue](https://github.com/saorgage/real-chat/issues)
-- [Wiki Maintenance](Wiki-Maintenance)

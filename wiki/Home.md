@@ -1,6 +1,6 @@
 # Real Chat
 
-A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — DeepSeek, OpenRouter (300+ models including Claude, GPT and Gemini), or your own endpoint. Bring your own key. It reads and edits your notes, searches your vault, browses the web, and works with images — all from a conversation in the sidebar.
+A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — DeepSeek, Mistral, OpenRouter (300+ models including Claude, GPT and Gemini), or your own endpoint. Bring your own key. It reads and edits your notes, searches your vault, browses the web, and works with images — all from a conversation in the sidebar.
 
 > Real Chat is free and MIT-licensed. Source: [saorgage/real-chat](https://github.com/saorgage/real-chat).
 
@@ -11,11 +11,12 @@ A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — De
 - **[Vision & Images](Vision-and-Images)** — paste a picture and have the model see *and* act on it.
 - **[Tools & Vault Actions](Tools-and-Vault-Actions)** — what it can do to your notes, plus web access.
 - **[Memory & Triggers](Memory-and-Triggers)** — persistent memory and custom commands.
+- **[Planned Features](Planned-Features)** — upcoming improvements and additions.
 
 ## What it does
 
 - **Five chat sessions**, each with its own history, draft, model and settings. Histories persist across restarts; archive and reload past chats; export a chat to a note.
-- **Any OpenAI-compatible provider** — DeepSeek direct (cache-aware pricing) or OpenRouter (live model list, per-model pricing, favourites). Per-session model selection.
+- **Any OpenAI-compatible provider** — DeepSeek direct (cache-aware pricing), Mistral (Mistral Large, Small, Pixtral, Codestral), or OpenRouter (live model list, per-model pricing, favourites). Per-session model selection.
 - **Acts in your vault** — create, edit, append, rename, delete and find/replace notes; frontmatter and tag editing; backlinks, orphans and broken-link finders; word count and vault stats. File changes prompt for confirmation (or enable YOLO mode to skip).
 - **Ranked vault search** — a 🔍 search box (toolbar button or hotkey-able command) for instant, token-free results; or ask in chat for synonym-expanded, reasoned search.
 - **Web access** (optional) — web search, fetch a page, download a file into your vault.

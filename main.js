@@ -17,6 +17,9 @@ const DEFAULT_SETTINGS = {
   apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-pro',
   orKey: '', orModel: 'deepseek/deepseek-chat', orModels: [], orModelsFetched: 0,
   orFavourites: [], orRecents: [],
+  mistralKey: '', mistralBaseUrl: 'https://api.mistral.ai', mistralModel: 'mistral-large-latest',
+  mistralLargeIn: 2.0, mistralLargeOut: 6.0, mistralSmallIn: 0.2, mistralSmallOut: 0.6,
+  mistralPixtralIn: 2.0, mistralPixtralOut: 6.0, mistralCodestralIn: 0.3, mistralCodestralOut: 0.9,
   systemPrompt:
     "You are a helpful assistant working inside the user's Obsidian vault.\n" +
     "Be clear and direct. No filler, no preamble, no restating the request, no needless summary at the end. Get to the point.\n" +
@@ -42,6 +45,8 @@ const DEFAULT_SETTINGS = {
   memoryPath: '_memory/real-chat.md', helpFolder: '_memory', memoryEnabled: true,
   smallEditThreshold: 400, temperature: 0.6,
   priceProIn: 0.435, priceProOut: 0.87, priceProCache: 0.003625, priceFlashIn: 0.14, priceFlashOut: 0.28, priceFlashCache: 0.0028,
+  mistralLargeIn: 2.0, mistralLargeOut: 6.0, mistralSmallIn: 0.2, mistralSmallOut: 0.6,
+  mistralPixtralIn: 2.0, mistralPixtralOut: 6.0, mistralCodestralIn: 0.3, mistralCodestralOut: 0.9,
   totalInTokens: 0, totalOutTokens: 0, totalCost: 0,
   lastHelpVersion: '', persisted: null, archive: [], yolo: false,
   visionEnabled: false, visionBaseUrl: '', visionKey: '', visionModel: '',
@@ -223,7 +228,12 @@ class GageChatView extends ItemView {
   getIcon() { return 'message-square'; }
   cur() { return this.sessions[this.active]; }
   isBusy(i) { return !!this.busy[i]; }
-  sessionModel() { return this.cur().model || (this.plugin.settings.provider === 'openrouter' ? this.plugin.settings.orModel : this.plugin.settings.model); }
+  sessionModel() {
+    if (this.cur().model) return this.cur().model;
+    if (this.plugin.settings.provider === 'openrouter') return this.plugin.settings.orModel;
+    if (this.plugin.settings.provider === 'mistral') return this.plugin.settings.mistralModel;
+    return this.plugin.settings.model;
+  }
 
   assistantLabel(m) {
     if (m && m.via === 'vision') return 'Vision';
@@ -234,10 +244,15 @@ class GageChatView extends ItemView {
       const tail = id.split('/').pop();
       return tail.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 22);
     }
+    if (id.includes('mistral-large') || id.includes('pixtral-large')) return 'Mistral Large';
+    if (id.includes('mistral-small')) return 'Mistral Small';
+    if (id.includes('pixtral')) return 'Pixtral Large';
+    if (id.includes('codestral')) return 'Codestral';
+    if (id.includes('mistral')) return 'Mistral';
     if (id.includes('pro')) return 'DeepSeek V4 Pro';
     if (id.includes('flash')) return 'DeepSeek V4 Flash';
     if (id.includes('deepseek')) return 'DeepSeek';
-    return this.plugin.settings.provider === 'openrouter' ? 'Assistant' : 'DeepSeek';
+    return this.plugin.settings.provider === 'openrouter' ? 'Assistant' : (this.plugin.settings.provider === 'mistral' ? 'Mistral' : 'DeepSeek');
   }
 
   populateModelSelect() {    const sel = this.modelSelect; if (!sel) return;
@@ -256,6 +271,11 @@ class GageChatView extends ItemView {
       if (recents.length) { const g = sel.createEl('optgroup'); g.label = '\u21bb Recent'; for (const id of recents) g.createEl('option', { text: label(byId[id]), value: id }); }
       const ga = sel.createEl('optgroup'); ga.label = 'All models';
       for (const m of list) ga.createEl('option', { text: label(m), value: m.id });
+    } else if (this.plugin.settings.provider === 'mistral') {
+      sel.createEl('option', { text: 'Mistral Large', value: 'mistral-large-latest' });
+      sel.createEl('option', { text: 'Mistral Small', value: 'mistral-small-latest' });
+      sel.createEl('option', { text: 'Pixtral Large (vision)', value: 'pixtral-large-latest' });
+      sel.createEl('option', { text: 'Codestral', value: 'codestral-latest' });
     } else {
       sel.createEl('option', { text: 'V4 Pro', value: 'deepseek-v4-pro' });
       sel.createEl('option', { text: 'V4 Flash', value: 'deepseek-v4-flash' });
@@ -581,8 +601,9 @@ class GageChatView extends ItemView {
     if (this.isBusy(sessionIndex)) return;
     const raw = this.inputEl.value.trim(); if (!raw) return;
     const onOR = this.plugin.settings.provider === 'openrouter';
-    const providerKey = onOR ? this.plugin.settings.orKey : this.plugin.settings.apiKey;
-    if (!providerKey) { new Notice('Set your ' + (onOR ? 'OpenRouter' : 'DeepSeek') + ' API key in settings first.'); return; }
+    const onMistral = this.plugin.settings.provider === 'mistral';
+    const providerKey = onOR ? this.plugin.settings.orKey : onMistral ? this.plugin.settings.mistralKey : this.plugin.settings.apiKey;
+    if (!providerKey) { new Notice('Set your ' + (onOR ? 'OpenRouter' : onMistral ? 'Mistral' : 'DeepSeek') + ' API key in settings first.'); return; }
     this.inputEl.value = ''; session.draft = ''; this.autoGrow();
     const openCtx = await this.buildContextPrefix(session);
     const imgs = (session.attachments || []).filter(a => a.image).map(a => a.image);
@@ -940,8 +961,8 @@ class GageChatSettingTab extends PluginSettingTab {
 
     try {
       containerEl.createEl('h3', { text: 'Provider' });
-      new Setting(containerEl).setName('Provider').setDesc('DeepSeek direct (cheapest, cache-aware pricing) or OpenRouter (one key, 300+ models incl. Claude, GPT, Gemini).')
-        .addDropdown((d) => { d.addOption('deepseek', 'DeepSeek direct'); d.addOption('openrouter', 'OpenRouter'); d.setValue(S.provider); d.onChange(async (v) => { S.provider = v; await save(); this.display(); this.plugin.refreshViews(); }); });
+      new Setting(containerEl).setName('Provider').setDesc('DeepSeek direct (cheapest, cache-aware pricing), Mistral (Mistral Large, Small, Pixtral, Codestral) or OpenRouter (one key, 300+ models incl. Claude, GPT, Gemini).')
+        .addDropdown((d) => { d.addOption('deepseek', 'DeepSeek direct'); d.addOption('mistral', 'Mistral'); d.addOption('openrouter', 'OpenRouter'); d.setValue(S.provider); d.onChange(async (v) => { S.provider = v; await save(); this.display(); this.plugin.refreshViews(); }); });
 
       if (S.provider === 'openrouter') {
         new Setting(containerEl).setName('OpenRouter API key').setDesc('From openrouter.ai/keys')
@@ -1001,6 +1022,13 @@ class GageChatSettingTab extends PluginSettingTab {
           search.oninput = () => renderFavs(search.value);
           renderFavs('');
         }
+      } else if (S.provider === 'mistral') {
+        new Setting(containerEl).setName('Mistral API key').setDesc('From console.mistral.ai/api-keys')
+          .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('...'); t.setValue(S.mistralKey); t.onChange(async (v) => { S.mistralKey = v.trim(); await save(); }); });
+        new Setting(containerEl).setName('Base URL').setDesc('Defaults to https://api.mistral.ai (the /v1 suffix is added automatically).')
+          .addText((t) => { t.setValue(S.mistralBaseUrl); t.onChange(async (v) => { S.mistralBaseUrl = v.trim(); await save(); }); });
+        new Setting(containerEl).setName('Default model')
+          .addDropdown((d) => { d.addOption('mistral-large-latest', 'Mistral Large'); d.addOption('mistral-small-latest', 'Mistral Small'); d.addOption('pixtral-large-latest', 'Pixtral Large (vision)'); d.addOption('codestral-latest', 'Codestral'); d.setValue(S.mistralModel); d.onChange(async (v) => { S.mistralModel = v; await save(); }); });
       } else {
         new Setting(containerEl).setName('DeepSeek API key').setDesc('Stored in plugin data; syncs with plugin sync on.')
           .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('sk-...'); t.setValue(S.apiKey); t.onChange(async (v) => { S.apiKey = v.trim(); await save(); }); });
@@ -1076,7 +1104,7 @@ class GageChatSettingTab extends PluginSettingTab {
         .addTextArea((t) => { t.inputEl.rows = 10; t.inputEl.style.width = '100%'; t.setValue(S.systemPrompt); t.onChange(async (v) => { S.systemPrompt = v; await save(); }); });
 
       containerEl.createEl('h3', { text: 'Pricing (USD per 1M tokens)' });
-      const priceFields = [['priceProIn', 'V4 Pro input (cache miss)'], ['priceProCache', 'V4 Pro input (cache hit)'], ['priceProOut', 'V4 Pro output'], ['priceFlashIn', 'V4 Flash input (cache miss)'], ['priceFlashCache', 'V4 Flash input (cache hit)'], ['priceFlashOut', 'V4 Flash output']];
+      const priceFields = [['priceProIn', 'V4 Pro input (cache miss)'], ['priceProCache', 'V4 Pro input (cache hit)'], ['priceProOut', 'V4 Pro output'], ['priceFlashIn', 'V4 Flash input (cache miss)'], ['priceFlashCache', 'V4 Flash input (cache hit)'], ['priceFlashOut', 'V4 Flash output'], ['mistralLargeIn', 'Mistral Large in'], ['mistralLargeOut', 'Mistral Large out'], ['mistralSmallIn', 'Mistral Small in'], ['mistralSmallOut', 'Mistral Small out'], ['mistralPixtralIn', 'Pixtral Large in'], ['mistralPixtralOut', 'Pixtral Large out'], ['mistralCodestralIn', 'Codestral in'], ['mistralCodestralOut', 'Codestral out']];
       priceFields.forEach((pf) => {
         const cur = S[pf[0]]; const val = (cur == null ? '' : String(cur));
         new Setting(containerEl).setName(pf[1])
@@ -1288,16 +1316,25 @@ module.exports = class GageChatPlugin extends Plugin {
     if (s.provider === 'openrouter') {
       return { baseUrl: 'https://openrouter.ai/api/v1', key: s.orKey, model: sessionModel || s.orModel, headers: { 'HTTP-Referer': 'https://obsidian.md', 'X-Title': 'Real Chat' } };
     }
+    if (s.provider === 'mistral') {
+      return { baseUrl: (s.mistralBaseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, ''), key: s.mistralKey, model: sessionModel || s.mistralModel, headers: {} };
+    }
     return { baseUrl: (s.baseUrl || 'https://api.deepseek.com').replace(/\/$/, ''), key: s.apiKey, model: sessionModel || s.model, headers: {} };
   }
 
   // True if the currently selected model can accept images directly (OpenRouter multimodal).
   activeModelHasVision(sessionModel) {
     const s = this.settings;
-    if (s.provider !== 'openrouter') return false;
-    const id = sessionModel || s.orModel;
-    const m = (s.orModels || []).find(x => x.id === id);
-    return !!(m && m.vision);
+    if (s.provider === 'openrouter') {
+      const id = sessionModel || s.orModel;
+      const m = (s.orModels || []).find(x => x.id === id);
+      return !!(m && m.vision);
+    }
+    if (s.provider === 'mistral') {
+      const id = sessionModel || s.mistralModel;
+      return id && (id.includes('pixtral') || id.includes('vision'));
+    }
+    return false;
   }
 
   async fetchOpenRouterModels(force) {
@@ -1463,6 +1500,19 @@ module.exports = class GageChatPlugin extends Plugin {
       if (mid) { s.orRecents = [mid, ...(s.orRecents || []).filter(x => x !== mid)].slice(0, 8); }
       const mdl = (s.orModels || []).find(m => m.id === mid);
       const cost = promptTok * (mdl ? mdl.inPrice : 0) + outTok * (mdl ? mdl.outPrice : 0);
+      s.totalInTokens += promptTok; s.totalOutTokens += outTok; s.totalCost += cost;
+      this.saveSettings(); this.refreshViews();
+      return { cost: cost, tok: promptTok + outTok };
+    }
+
+    // Mistral: use fixed per-model pricing (prices are per million tokens).
+    if (s.provider === 'mistral') {
+      const id = model || s.mistralModel;
+      let inRate = s.mistralLargeIn, outRate = s.mistralLargeOut;
+      if (id && id.includes('small')) { inRate = s.mistralSmallIn; outRate = s.mistralSmallOut; }
+      else if (id && id.includes('pixtral')) { inRate = s.mistralPixtralIn; outRate = s.mistralPixtralOut; }
+      else if (id && id.includes('codestral')) { inRate = s.mistralCodestralIn; outRate = s.mistralCodestralOut; }
+      const cost = (promptTok / 1e6) * inRate + (outTok / 1e6) * outRate;
       s.totalInTokens += promptTok; s.totalOutTokens += outTok; s.totalCost += cost;
       this.saveSettings(); this.refreshViews();
       return { cost: cost, tok: promptTok + outTok };
