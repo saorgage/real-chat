@@ -36,6 +36,7 @@ try {
   Module._load = originalLoad;
 }
 const GageChatView = mainModule.exports.GageChatView;
+const GageChatPlugin = mainModule.exports;
 
 test('streams string and text-block content without stringifying objects', async (t) => {
   const originalFetch = globalThis.fetch;
@@ -75,4 +76,41 @@ test('streams string and text-block content without stringifying objects', async
     { delta: 'Hello ', kind: 'content' },
     { delta: 'from Mistral!', kind: 'content' }
   ]);
+});
+
+test('migrates legacy API keys to SecretStorage and saves only secret IDs', async () => {
+  const secretValues = new Map();
+  const plugin = Object.create(GageChatPlugin.prototype);
+  plugin.app = {
+    secretStorage: {
+      setSecret: (id, value) => secretValues.set(id, value),
+      getSecret: (id) => secretValues.get(id) || null
+    }
+  };
+  plugin.loadData = async () => ({
+    apiKey: 'test-only-deepseek-key',
+    orKey: 'test-only-openrouter-key',
+    mistralKey: 'test-only-mistral-key',
+    visionKey: 'test-only-vision-key',
+    braveKey: 'test-only-brave-key',
+    tavilyKey: 'test-only-tavily-key',
+    provider: 'mistral'
+  });
+  let savedSettings;
+  plugin.saveData = async (settings) => { savedSettings = JSON.parse(JSON.stringify(settings)); };
+
+  await plugin.loadSettings();
+
+  const settingNames = ['apiKeySecret', 'orKeySecret', 'mistralKeySecret', 'visionKeySecret', 'braveKeySecret', 'tavilyKeySecret'];
+  assert.equal(secretValues.size, settingNames.length);
+  for (const settingName of settingNames) {
+    const secretId = plugin.settings[settingName];
+    assert.ok(secretId);
+    assert.equal(plugin.getSecret(settingName), secretValues.get(secretId));
+  }
+  for (const legacyName of ['apiKey', 'orKey', 'mistralKey', 'visionKey', 'braveKey', 'tavilyKey']) {
+    assert.equal(Object.hasOwn(savedSettings, legacyName), false);
+  }
+  assert.equal(JSON.stringify(savedSettings).includes('test-only-'), false);
+  assert.equal(savedSettings.provider, 'mistral');
 });

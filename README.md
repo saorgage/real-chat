@@ -54,9 +54,10 @@ Once accepted: Settings → Community plugins → Browse → search "Real Chat" 
 ## Setup
 
 1. Open Settings → **Real Chat**.
-2. Choose a **provider**: DeepSeek direct (cheapest) or OpenRouter (one key, many models).
-3. Paste your API key. On OpenRouter, click **Load / refresh models**.
+2. Choose a **provider**: DeepSeek direct (cheapest), Mistral, or OpenRouter (one key, many models).
+3. Select or add your API key in Obsidian SecretStorage. On OpenRouter, click **Load / refresh models**.
 4. Open the sidebar from the ribbon (speech-bubble icon) or the "Open Real Chat" command.
+5. Add/select keys separately on each device; SecretStorage is not synced with vault files.
 
 ## Privacy & network use
 
@@ -69,9 +70,10 @@ Real Chat only makes network requests you configure or trigger:
   you/the model fetch or download from.
 - **OpenRouter model list and pricing** are fetched from OpenRouter when you use that provider.
 
-There is no telemetry and no other data collection. Your API keys are stored in this plugin's
-local `data.json` and are never sent anywhere except the provider they belong to. The plugin
-does not download or execute any remote code.
+There is no telemetry and no other data collection. Your API keys are stored in Obsidian
+SecretStorage rather than the plugin's `data.json`, and are only sent to their configured
+providers when used. SecretStorage values are local to each device, so add/select them separately
+on every device. The plugin does not download or execute any remote code.
 
 ## License
 

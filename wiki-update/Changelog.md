@@ -6,6 +6,12 @@ All notable changes to Real Chat are recorded here. For the canonical source, se
 
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [semantic versioning](https://semver.org/).
 
+## [1.2.2] - 2026-11-20
+
+### Fixed
+- Store API keys in Obsidian SecretStorage instead of plugin `data.json`; migrate existing keys automatically.
+- Require Obsidian 1.11.4 or newer for SecretStorage support. Keys are local to each device and must be configured separately.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed

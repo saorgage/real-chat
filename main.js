@@ -1,6 +1,6 @@
 'use strict';
 
-const { Plugin, ItemView, PluginSettingTab, Setting, Notice, MarkdownRenderer, TFile, Modal, MarkdownView, requestUrl, Platform, setIcon } = require('obsidian');
+const { Plugin, ItemView, PluginSettingTab, Setting, SecretComponent, Notice, MarkdownRenderer, TFile, Modal, MarkdownView, requestUrl, Platform, setIcon } = require('obsidian');
 
 const IS_MOBILE = Platform.isMobile;
 
@@ -11,13 +11,21 @@ const TEXT_EXTS = ['md', 'txt', 'csv', 'json', 'js', 'ts', 'py', 'html', 'css', 
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
 const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
 const COLLAPSE_CHARS = 1200;
+const SECRET_SETTINGS = [
+  { legacy: 'apiKey', setting: 'apiKeySecret', id: 'real-chat-deepseek-api-key' },
+  { legacy: 'orKey', setting: 'orKeySecret', id: 'real-chat-openrouter-api-key' },
+  { legacy: 'mistralKey', setting: 'mistralKeySecret', id: 'real-chat-mistral-api-key' },
+  { legacy: 'visionKey', setting: 'visionKeySecret', id: 'real-chat-vision-api-key' },
+  { legacy: 'braveKey', setting: 'braveKeySecret', id: 'real-chat-brave-api-key' },
+  { legacy: 'tavilyKey', setting: 'tavilyKeySecret', id: 'real-chat-tavily-api-key' }
+];
 
 const DEFAULT_SETTINGS = {
   provider: 'deepseek',
-  apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-pro',
-  orKey: '', orModel: 'deepseek/deepseek-chat', orModels: [], orModelsFetched: 0,
+  apiKeySecret: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-pro',
+  orKeySecret: '', orModel: 'deepseek/deepseek-chat', orModels: [], orModelsFetched: 0,
   orFavourites: [], orRecents: [],
-  mistralKey: '', mistralBaseUrl: 'https://api.mistral.ai', mistralModel: 'mistral-large-latest',
+  mistralKeySecret: '', mistralBaseUrl: 'https://api.mistral.ai', mistralModel: 'mistral-large-latest',
   mistralLargeIn: 2.0, mistralLargeOut: 6.0, mistralSmallIn: 0.2, mistralSmallOut: 0.6,
   mistralPixtralIn: 2.0, mistralPixtralOut: 6.0, mistralCodestralIn: 0.3, mistralCodestralOut: 0.9,
   systemPrompt:
@@ -49,8 +57,8 @@ const DEFAULT_SETTINGS = {
   mistralPixtralIn: 2.0, mistralPixtralOut: 6.0, mistralCodestralIn: 0.3, mistralCodestralOut: 0.9,
   totalInTokens: 0, totalOutTokens: 0, totalCost: 0,
   lastHelpVersion: '', persisted: null, archive: [], yolo: false,
-  visionEnabled: false, visionBaseUrl: '', visionKey: '', visionModel: '',
-  webEnabled: true, webMaxChars: 6000, searchProvider: 'duckduckgo', braveKey: '', tavilyKey: '',
+  visionEnabled: false, visionBaseUrl: '', visionKeySecret: '', visionModel: '',
+  webEnabled: true, webMaxChars: 6000, searchProvider: 'duckduckgo', braveKeySecret: '', tavilyKeySecret: '',
   downloadFolder: 'Attachments', allowRunCommand: false,
   prompts: [
     { name: 'Summarise concisely', text: 'Summarise the above concisely: clear, direct, no filler.' },
@@ -510,7 +518,7 @@ class GageChatView extends ItemView {
   attachSelection() { const view = this.app.workspace.getActiveViewOfType(MarkdownView); if (!view) { new Notice('No open note.'); return; } const sel = view.editor.getSelection(); if (!sel) { new Notice('No text selected.'); return; } this.cur().attachments.push({ label: 'Selection (' + sel.length + ' chars)', content: '[Selected text from "' + view.file.path + '"]:\n' + sel }); this.persist(); this.renderChips(); new Notice('Selection attached.'); }
   pickAttachment() { const files = this.app.vault.getFiles().filter(f => TEXT_EXTS.includes(extOf(f.path))).sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 60); new PickerModal(this.app, 'Attach a text/data file', files.map(f => ({ label: f.path, value: f.path })), async (path) => { const f = this.app.vault.getAbstractFileByPath(path); if (f instanceof TFile) { const body = await this.app.vault.read(f); this.cur().attachments.push({ label: f.name, content: '[File "' + f.path + '"]:\n' + body }); this.persist(); this.renderChips(); } }).open(); }
   async onDrop(e) { e.preventDefault(); const files = e.dataTransfer && e.dataTransfer.files; if (!files || !files.length) return; for (const file of files) { await this.importFileObject(file); } }
-  visionReady() { const s = this.plugin.settings; return s.visionEnabled && s.visionBaseUrl && s.visionKey && s.visionModel; }
+  visionReady() { const s = this.plugin.settings; return s.visionEnabled && s.visionBaseUrl && this.plugin.getSecret('visionKeySecret') && s.visionModel; }
   imagesAvailable() { return this.visionReady() || this.plugin.activeModelHasVision(this.sessionModel()); }
   fileToDataUrl(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('read failed')); r.readAsDataURL(file); }); }
   async addImageAttachment(label, dataUrl) { this.cur().attachments.push({ label: label, image: dataUrl }); this.persist(); this.renderChips(); if (!this.imagesAvailable()) new Notice('Image attached, but the current model cannot see it — pick a multimodal model or set a vision provider in settings.'); else { const reader = this.visionReady() ? this.plugin.settings.visionModel : this.sessionModel(); new Notice('Image attached — ' + reader + ' will read it. It stays attached for follow-up questions; tap × on the chip to remove.'); } }
@@ -602,7 +610,7 @@ class GageChatView extends ItemView {
     const raw = this.inputEl.value.trim(); if (!raw) return;
     const onOR = this.plugin.settings.provider === 'openrouter';
     const onMistral = this.plugin.settings.provider === 'mistral';
-    const providerKey = onOR ? this.plugin.settings.orKey : onMistral ? this.plugin.settings.mistralKey : this.plugin.settings.apiKey;
+    const providerKey = this.plugin.getSecret(onOR ? 'orKeySecret' : onMistral ? 'mistralKeySecret' : 'apiKeySecret');
     if (!providerKey) { new Notice('Set your ' + (onOR ? 'OpenRouter' : onMistral ? 'Mistral' : 'DeepSeek') + ' API key in settings first.'); return; }
     this.inputEl.value = ''; session.draft = ''; this.autoGrow();
     const openCtx = await this.buildContextPrefix(session);
@@ -669,7 +677,7 @@ class GageChatView extends ItemView {
     if (wantVision && !nativeVision) {
       if (!this.visionReady()) { session.messages.push({ role: 'assistant', content: 'You attached an image, but the current model cannot see images and no vision provider is configured. Either pick a multimodal OpenRouter model, or turn on a vision provider in settings.', time: nowStamp() }); return; }
       const s = this.plugin.settings;
-      driver = { baseUrl: s.visionBaseUrl, key: s.visionKey, model: s.visionModel, headers: {} };
+      driver = { baseUrl: s.visionBaseUrl, key: this.plugin.getSecret('visionKeySecret'), model: s.visionModel, headers: {} };
       forceImages = true; via = 'vision';
     }
     // Make the pasted image bytes available to the save_attached_image tool during this run.
@@ -958,15 +966,22 @@ class GageChatSettingTab extends PluginSettingTab {
     const { containerEl } = this; containerEl.empty();
     const S = this.plugin.settings;
     const save = async () => { await this.plugin.saveSettings(); };
+    const addSecretSetting = (name, description, settingName) => {
+      new Setting(containerEl).setName(name).setDesc(description)
+        .addComponent((el) => new SecretComponent(this.app, el)
+          .setValue(S[settingName] || '')
+          .onChange(async (value) => { S[settingName] = value || ''; await save(); }));
+    };
 
     try {
       containerEl.createEl('h3', { text: 'Provider' });
+      const secretNote = containerEl.createEl('p', { text: 'API keys are stored in Obsidian SecretStorage, outside plugin data.json. Secrets are local to this device and must be selected or added separately on each device.' });
+      secretNote.style.fontSize = '12px'; secretNote.style.color = 'var(--text-muted)';
       new Setting(containerEl).setName('Provider').setDesc('DeepSeek direct (cheapest, cache-aware pricing), Mistral (Mistral Large, Small, Pixtral, Codestral) or OpenRouter (one key, 300+ models incl. Claude, GPT, Gemini).')
         .addDropdown((d) => { d.addOption('deepseek', 'DeepSeek direct'); d.addOption('mistral', 'Mistral'); d.addOption('openrouter', 'OpenRouter'); d.setValue(S.provider); d.onChange(async (v) => { S.provider = v; await save(); this.display(); this.plugin.refreshViews(); }); });
 
       if (S.provider === 'openrouter') {
-        new Setting(containerEl).setName('OpenRouter API key').setDesc('From openrouter.ai/keys')
-          .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('sk-or-...'); t.setValue(S.orKey); t.onChange(async (v) => { S.orKey = v.trim(); await save(); }); });
+        addSecretSetting('OpenRouter API key', 'From openrouter.ai/keys', 'orKeySecret');
 
         const modelSetting = new Setting(containerEl).setName('Default model')
           .setDesc((S.orModels && S.orModels.length) ? (S.orModels.length + ' models loaded. Out price shown per million tokens.') : 'Load the model list first.');
@@ -1023,15 +1038,13 @@ class GageChatSettingTab extends PluginSettingTab {
           renderFavs('');
         }
       } else if (S.provider === 'mistral') {
-        new Setting(containerEl).setName('Mistral API key').setDesc('From console.mistral.ai/api-keys')
-          .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('...'); t.setValue(S.mistralKey); t.onChange(async (v) => { S.mistralKey = v.trim(); await save(); }); });
+        addSecretSetting('Mistral API key', 'From console.mistral.ai/api-keys', 'mistralKeySecret');
         new Setting(containerEl).setName('Base URL').setDesc('Defaults to https://api.mistral.ai (the /v1 suffix is added automatically).')
           .addText((t) => { t.setValue(S.mistralBaseUrl); t.onChange(async (v) => { S.mistralBaseUrl = v.trim(); await save(); }); });
         new Setting(containerEl).setName('Default model')
           .addDropdown((d) => { d.addOption('mistral-large-latest', 'Mistral Large'); d.addOption('mistral-small-latest', 'Mistral Small'); d.addOption('pixtral-large-latest', 'Pixtral Large (vision)'); d.addOption('codestral-latest', 'Codestral'); d.setValue(S.mistralModel); d.onChange(async (v) => { S.mistralModel = v; await save(); }); });
       } else {
-        new Setting(containerEl).setName('DeepSeek API key').setDesc('Stored in plugin data; syncs with plugin sync on.')
-          .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('sk-...'); t.setValue(S.apiKey); t.onChange(async (v) => { S.apiKey = v.trim(); await save(); }); });
+        addSecretSetting('DeepSeek API key', 'From platform.deepseek.com/api_keys', 'apiKeySecret');
         new Setting(containerEl).setName('Base URL')
           .addText((t) => { t.setValue(S.baseUrl); t.onChange(async (v) => { S.baseUrl = v.trim(); await save(); }); });
         new Setting(containerEl).setName('Default model')
@@ -1048,8 +1061,7 @@ class GageChatSettingTab extends PluginSettingTab {
         .addToggle((t) => { t.setValue(S.visionEnabled); t.onChange(async (v) => { S.visionEnabled = v; await save(); }); });
       new Setting(containerEl).setName('Vision base URL').setDesc('OpenAI-compatible /chat/completions endpoint, without the trailing path. e.g. Gemini: https://generativelanguage.googleapis.com/v1beta/openai')
         .addText((t) => { t.setPlaceholder('https://...'); t.setValue(S.visionBaseUrl); t.onChange(async (v) => { S.visionBaseUrl = v.trim(); await save(); }); });
-      new Setting(containerEl).setName('Vision API key')
-        .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('key for the vision provider'); t.setValue(S.visionKey); t.onChange(async (v) => { S.visionKey = v.trim(); await save(); }); });
+      addSecretSetting('Vision API key', 'Key for the vision provider', 'visionKeySecret');
       new Setting(containerEl).setName('Vision model').setDesc('e.g. gemini-2.5-flash, or an OpenRouter model id like google/gemini-2.5-flash')
         .addText((t) => { t.setPlaceholder('model id'); t.setValue(S.visionModel); t.onChange(async (v) => { S.visionModel = v.trim(); await save(); }); });
 
@@ -1060,10 +1072,8 @@ class GageChatSettingTab extends PluginSettingTab {
         .addToggle((t) => { t.setValue(S.webEnabled); t.onChange(async (v) => { S.webEnabled = v; await save(); }); });
       new Setting(containerEl).setName('Search provider')
         .addDropdown((d) => { d.addOption('duckduckgo', 'DuckDuckGo (no key)'); d.addOption('brave', 'Brave (key)'); d.addOption('tavily', 'Tavily (key)'); d.setValue(S.searchProvider); d.onChange(async (v) => { S.searchProvider = v; await save(); }); });
-      new Setting(containerEl).setName('Brave API key')
-        .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('optional'); t.setValue(S.braveKey); t.onChange(async (v) => { S.braveKey = v.trim(); await save(); }); });
-      new Setting(containerEl).setName('Tavily API key')
-        .addText((t) => { t.inputEl.type = 'password'; t.setPlaceholder('optional'); t.setValue(S.tavilyKey); t.onChange(async (v) => { S.tavilyKey = v.trim(); await save(); }); });
+      addSecretSetting('Brave API key', 'Optional; stored in Obsidian SecretStorage', 'braveKeySecret');
+      addSecretSetting('Tavily API key', 'Optional; stored in Obsidian SecretStorage', 'tavilyKeySecret');
       new Setting(containerEl).setName('Max characters per fetched page').setDesc('Trims long pages to keep token use sane.')
         .addText((t) => { t.setValue(String(S.webMaxChars)); t.onChange(async (v) => { const n = parseInt(v, 10); if (!isNaN(n)) { S.webMaxChars = n; await save(); } }); });
 
@@ -1126,6 +1136,11 @@ class GageChatSettingTab extends PluginSettingTab {
 
 module.exports = class GageChatPlugin extends Plugin {
   async onload() {
+    const secretStorage = this.app.secretStorage;
+    if (!secretStorage || typeof secretStorage.getSecret !== 'function' || typeof secretStorage.setSecret !== 'function') {
+      new Notice('Real Chat requires Obsidian 1.11.4 or newer for secure API key storage.');
+      return;
+    }
     await this.loadSettings();
     this.registerView(VIEW_TYPE_GAGE_CHAT, (leaf) => new GageChatView(leaf, this));
     this.addRibbonIcon('message-square', 'Open Real Chat', () => this.activateView());
@@ -1136,7 +1151,7 @@ module.exports = class GageChatPlugin extends Plugin {
     this.addCommand({ id: 'real-chat-search-vault', name: 'Search vault (ranked)', callback: () => new VaultSearchModal(this.app, this).open() });
     this.addSettingTab(new GageChatSettingTab(this.app, this));
     this.app.workspace.onLayoutReady(() => this.writeHelpIfNeeded());
-    if (this.settings.provider === 'openrouter' && this.settings.orKey && !(this.settings.orModels && this.settings.orModels.length)) {
+    if (this.settings.provider === 'openrouter' && this.getSecret('orKeySecret') && !(this.settings.orModels && this.settings.orModels.length)) {
       this.fetchOpenRouterModels().then(() => this.refreshViews());
     }
   }
@@ -1164,6 +1179,8 @@ module.exports = class GageChatPlugin extends Plugin {
   helpContent() {
     return [
       '# Real Chat — how to use', '', 'Auto-generated (v' + this.manifest.version + '). Regenerated on each update.', '',
+      '## API keys', 'Keys are stored in Obsidian SecretStorage, not in this plugin\'s data.json. Existing keys are migrated automatically when Real Chat loads.',
+      'SecretStorage is local to each device and is not synced with your vault, so select or add your keys separately on every device.', '',
       '## Sessions & history', 'Five chats (1-5), each with own history, draft, model, pins, YOLO setting. Tabs auto-title from your first message.',
       'Histories survive restarts. The ⋯ menu archives a session, opens history (reload any past chat), or exports to a note.', '',
       '## YOLO mode', 'Header badge toggles YOLO for the current session (overrides the global default in settings). When ON, all file',
@@ -1242,14 +1259,16 @@ module.exports = class GageChatPlugin extends Plugin {
   async webSearch(query) {
     if (!query) return 'Error: empty query.';
     const provider = this.settings.searchProvider || 'duckduckgo';
-    if (provider === 'brave' && this.settings.braveKey) {
-      const resp = await requestUrl({ url: 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query), headers: { 'Accept': 'application/json', 'X-Subscription-Token': this.settings.braveKey } });
+    const braveKey = this.getSecret('braveKeySecret');
+    const tavilyKey = this.getSecret('tavilyKeySecret');
+    if (provider === 'brave' && braveKey) {
+      const resp = await requestUrl({ url: 'https://api.search.brave.com/res/v1/web/search?q=' + encodeURIComponent(query), headers: { 'Accept': 'application/json', 'X-Subscription-Token': braveKey } });
       const data = resp.json; const results = (data.web && data.web.results) || [];
       if (!results.length) return 'No results.';
       return results.slice(0, 8).map((r, i) => (i + 1) + '. ' + r.title + '\n   ' + r.url + '\n   ' + (r.description || '')).join('\n\n');
     }
-    if (provider === 'tavily' && this.settings.tavilyKey) {
-      const resp = await requestUrl({ url: 'https://api.tavily.com/search', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: this.settings.tavilyKey, query: query, max_results: 8 }) });
+    if (provider === 'tavily' && tavilyKey) {
+      const resp = await requestUrl({ url: 'https://api.tavily.com/search', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: tavilyKey, query: query, max_results: 8 }) });
       const data = resp.json; const results = data.results || [];
       if (!results.length) return 'No results.';
       return results.slice(0, 8).map((r, i) => (i + 1) + '. ' + r.title + '\n   ' + r.url + '\n   ' + (r.content || '').slice(0, 200)).join('\n\n');
@@ -1314,12 +1333,12 @@ module.exports = class GageChatPlugin extends Plugin {
   activeApi(sessionModel) {
     const s = this.settings;
     if (s.provider === 'openrouter') {
-      return { baseUrl: 'https://openrouter.ai/api/v1', key: s.orKey, model: sessionModel || s.orModel, headers: { 'HTTP-Referer': 'https://obsidian.md', 'X-Title': 'Real Chat' } };
+      return { baseUrl: 'https://openrouter.ai/api/v1', key: this.getSecret('orKeySecret'), model: sessionModel || s.orModel, headers: { 'HTTP-Referer': 'https://obsidian.md', 'X-Title': 'Real Chat' } };
     }
     if (s.provider === 'mistral') {
-      return { baseUrl: (s.mistralBaseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, ''), key: s.mistralKey, model: sessionModel || s.mistralModel, headers: {} };
+      return { baseUrl: (s.mistralBaseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, ''), key: this.getSecret('mistralKeySecret'), model: sessionModel || s.mistralModel, headers: {} };
     }
-    return { baseUrl: (s.baseUrl || 'https://api.deepseek.com').replace(/\/$/, ''), key: s.apiKey, model: sessionModel || s.model, headers: {} };
+    return { baseUrl: (s.baseUrl || 'https://api.deepseek.com').replace(/\/$/, ''), key: this.getSecret('apiKeySecret'), model: sessionModel || s.model, headers: {} };
   }
 
   // True if the currently selected model can accept images directly (OpenRouter multimodal).
@@ -1342,7 +1361,8 @@ module.exports = class GageChatPlugin extends Plugin {
     const fresh = s.orModels && s.orModels.length && (Date.now() - (s.orModelsFetched || 0) < 6 * 3600 * 1000);
     if (fresh && !force) return s.orModels;
     try {
-      const res = await requestUrl({ url: 'https://openrouter.ai/api/v1/models', method: 'GET', headers: s.orKey ? { 'Authorization': 'Bearer ' + s.orKey } : {} });
+      const key = this.getSecret('orKeySecret');
+      const res = await requestUrl({ url: 'https://openrouter.ai/api/v1/models', method: 'GET', headers: key ? { 'Authorization': 'Bearer ' + key } : {} });
       const json = typeof res.json === 'object' ? res.json : JSON.parse(res.text);
       const list = (json.data || []).map(m => {
         const arch = m.architecture || {};
@@ -1536,8 +1556,31 @@ module.exports = class GageChatPlugin extends Plugin {
   loadPersistedSessions() { const p = this.settings.persisted; if (!Array.isArray(p) || p.length !== SESSION_COUNT) return null; return p.map(s => ({ messages: s.messages || [], reference: !!s.reference, draft: s.draft || '', model: s.model || '', attachments: s.attachments || [], pinned: s.pinned || [], title: s.title || '', yolo: s.yolo == null ? null : s.yolo, sessTok: s.sessTok || 0, sessCost: s.sessCost || 0 })); }
   async activateView() { const { workspace } = this.app; const ex = workspace.getLeavesOfType(VIEW_TYPE_GAGE_CHAT); if (ex.length > 0) { workspace.revealLeaf(ex[0]); return; } const leaf = IS_MOBILE ? workspace.getLeaf(true) : workspace.getRightLeaf(false); await leaf.setViewState({ type: VIEW_TYPE_GAGE_CHAT, active: true }); workspace.revealLeaf(leaf); }
   refreshViews() { for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GAGE_CHAT)) { const v = leaf.view; if (v && v.populateModelSelect) v.populateModelSelect(); if (v && v.refreshCost) v.refreshCost(); if (v && v.refreshMemBadge) v.refreshMemBadge(); if (v && v.refreshYoloBadge) v.refreshYoloBadge(); } }
-  async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
-  async saveSettings() { await this.saveData(this.settings); }
+  getSecret(settingName) {
+    const id = this.settings[settingName];
+    return id ? this.app.secretStorage.getSecret(id) || '' : '';
+  }
+  async loadSettings() {
+    const data = (await this.loadData()) || {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    let changed = false;
+    for (const secret of SECRET_SETTINGS) {
+      const legacyValue = data[secret.legacy];
+      if (!this.settings[secret.setting] && typeof legacyValue === 'string' && legacyValue) {
+        this.app.secretStorage.setSecret(secret.id, legacyValue);
+        this.settings[secret.setting] = secret.id;
+      }
+      if (Object.prototype.hasOwnProperty.call(this.settings, secret.legacy)) {
+        delete this.settings[secret.legacy];
+        changed = true;
+      }
+    }
+    if (changed) await this.saveSettings();
+  }
+  async saveSettings() {
+    for (const secret of SECRET_SETTINGS) delete this.settings[secret.legacy];
+    await this.saveData(this.settings);
+  }
 };
 
 /* nosourcemap */
