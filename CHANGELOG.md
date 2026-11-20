@@ -6,6 +6,12 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.2.2] - 2026-11-20
+
+### Fixed
+- Store API keys in Obsidian SecretStorage instead of plugin `data.json`; migrate existing keys automatically.
+- Require Obsidian 1.11.4 or newer for SecretStorage support. SecretStorage values are local to each device and must be configured separately.
+
 ## [1.2.1] - 2026-11-20
 
 ### Fixed

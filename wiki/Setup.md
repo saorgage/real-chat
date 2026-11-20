@@ -12,13 +12,16 @@ Once accepted: **Settings → Community plugins → Browse → search "Real Chat
 
 ## First-run setup
 
+Real Chat requires **Obsidian 1.11.4 or newer** for secure API key storage.
+
 1. Open **Settings → Real Chat**.
 2. Choose a **provider**:
    - **DeepSeek direct** — cheapest, cache-aware pricing.
    - **Mistral** — Mistral Large, Small, Pixtral (vision), and Codestral models.
    - **OpenRouter** — one key, 300+ models (Claude, GPT, Gemini, …) with a live model list and per-model pricing.
-3. Paste your **API key** for the chosen provider. On OpenRouter, click **Load / refresh models** to pull the list, then star your favourites.
+3. Select or add your **API key** in Obsidian SecretStorage. On OpenRouter, click **Load / refresh models** to pull the list, then star your favourites.
 4. Open the sidebar from the ribbon (speech-bubble icon) or run the **Open Real Chat** command.
+5. Add or select your keys separately on each device; SecretStorage is local and is not synced with vault files.
 
 ## Picking a model
 
@@ -28,4 +31,4 @@ Once accepted: **Settings → Community plugins → Browse → search "Real Chat
 
 ## Where settings live
 
-Your keys and live settings are stored in this plugin's local `data.json` inside the plugin folder. They are never sent anywhere except the provider they belong to. Don't commit `data.json` to a public repo.
+API keys are stored in Obsidian SecretStorage, outside the plugin's `data.json`; other plugin settings remain in `data.json`. Existing keys are migrated to SecretStorage automatically when Real Chat loads. Keys are sent only to their configured providers when used.

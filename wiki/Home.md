@@ -4,9 +4,13 @@ A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — De
 
 > Real Chat is free and MIT-licensed. Source: [saorgage/real-chat](https://github.com/saorgage/real-chat).
 
+## New in 1.2.2
+
+API keys are now stored in Obsidian SecretStorage instead of plugin `data.json`. Existing keys are migrated automatically. Obsidian 1.11.4 or newer is required; add or select keys separately on each device.
+
 ## Start here
 
-- **[Setup](Setup)** — install, pick a provider, paste your key.
+- **[Setup](Setup)** — install, pick a provider, securely select your key.
 - **[Usage](Usage)** — sessions, context, search, slash commands, inline edit, keys.
 - **[Vision & Images](Vision-and-Images)** — paste a picture and have the model see *and* act on it.
 - **[Tools & Vault Actions](Tools-and-Vault-Actions)** — what it can do to your notes, plus web access.
@@ -25,4 +29,4 @@ A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — De
 
 ## Privacy
 
-Real Chat only makes the network requests you configure or trigger. Your messages and any note content you add as context go to the **API provider you choose**; web access (off unless enabled) talks to your search provider and any URLs you/the model fetch. No telemetry, no other data collection. API keys live in the plugin's local `data.json` and are sent only to the provider they belong to. See [Privacy & network use](https://github.com/saorgage/real-chat#privacy--network-use) in the README.
+Real Chat only makes the network requests you configure or trigger. Your messages and any note content you add as context go to the **API provider you choose**; web access (off unless enabled) talks to your search provider and any URLs you/the model fetch. No telemetry, no other data collection. API keys are stored in Obsidian SecretStorage, outside plugin `data.json`, and sent only to their configured providers when used. SecretStorage is local to each device. See [Privacy & network use](https://github.com/saorgage/real-chat#privacy--network-use) in the README.
