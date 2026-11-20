@@ -4,6 +4,10 @@ A chat sidebar for Obsidian that works with **any OpenAI-compatible API** — De
 
 > Real Chat is free and MIT-licensed. Source: [saorgage/real-chat](https://github.com/saorgage/real-chat).
 
+## New in 1.2.1
+
+Streaming now handles text-block arrays returned by compatible providers such as Mistral, rather than displaying `[object Object]` before replies.
+
 ## Start here
 
 - **[Setup](Setup)** — install, pick a provider, paste your key.

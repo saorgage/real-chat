@@ -6,6 +6,11 @@ readable by any tool or person working on the project (see "How this log is acce
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semantic versioning](https://semver.org/). The version is single-sourced from `manifest.json`.
 
+## [1.2.1] - 2026-11-20
+
+### Fixed
+- Handle streamed `delta.content` arrays by appending their text blocks instead of rendering `[object Object]`.
+
 ## [1.2.0] - 2026-07-05
 
 ### Added

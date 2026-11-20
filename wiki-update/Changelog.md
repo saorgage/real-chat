@@ -6,6 +6,16 @@ All notable changes to Real Chat are recorded here. For the canonical source, se
 
 The format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [semantic versioning](https://semver.org/).
 
+## [1.2.1] - 2026-11-20
+
+### Fixed
+- Handle streamed `delta.content` arrays by appending their text blocks instead of rendering `[object Object]`.
+
+## [1.2.0] - 2026-07-05
+
+### Added
+- **Mistral provider support** — Mistral Large, Small, Pixtral (vision-capable), and Codestral models. Configure your Mistral API key in Settings and select Mistral models per-session. Pixtral Large supports vision (image understanding).
+
 ## [1.1.3] - 2026-06-25
 
 ### Fixed
